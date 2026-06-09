@@ -2,11 +2,21 @@ package helpers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+)
+
+var (
+	ErrRecordNotFound = errors.New("record not found")
+	ErrInvalidJSON    = errors.New("invalid JSON")
+	ErrEmptyBody      = errors.New("request body must not be empty")
+	ErrBodyTooLarge   = errors.New("request body too large")
+	ErrUnknownField   = errors.New("unknown field in request body")
+	ErrContentType    = errors.New("content type must be application/json")
 )
 
 func CheckIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, error) {
@@ -42,6 +52,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBytes))
 
 	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
 
 	if err := dec.Decode(dst); err != nil {
 		return fmt.Errorf("invalid JSON: %w", err)
