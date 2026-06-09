@@ -79,7 +79,7 @@ func (app *application) getTodoHandler(w http.ResponseWriter, r *http.Request) {
 	todo, err := app.models.Todos.GetTodo(id)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrRecordNotFound):
+		case errors.Is(err, h.ErrRecordNotFound):
 			app.notFoundResponse(w)
 		default:
 			app.serverErrorResponse(w, r, err)
@@ -106,7 +106,7 @@ func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request
 	existingTodo, err := app.models.Todos.GetTodo(id)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrRecordNotFound):
+		case errors.Is(err, h.ErrRecordNotFound):
 			app.notFoundResponse(w)
 		default:
 			app.serverErrorResponse(w, r, err)
@@ -153,7 +153,7 @@ func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request
 	err = app.models.Todos.DeleteTodo(id)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrRecordNotFound):
+		case errors.Is(err, h.ErrRecordNotFound):
 			app.notFoundResponse(w)
 		default:
 			app.logger.Error("failed to delete todo", "err", err)
@@ -174,7 +174,7 @@ func (app *application) completeTodoHandler(w http.ResponseWriter, r *http.Reque
 	err = app.models.Todos.MarkTodoComplete(id)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrRecordNotFound):
+		case errors.Is(err, h.ErrRecordNotFound):
 			app.notFoundResponse(w)
 		default:
 			app.logger.Error("failed to mark todo as complete", "err", err)
