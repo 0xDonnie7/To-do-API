@@ -9,13 +9,6 @@ import (
 
 type envelope map[string]any
 
-var ErrRecordNotFound = errors.New("record not found")
-var ErrInvalidJSON = errors.New("invalid JSON")
-var ErrEmptyBody = errors.New("request body must not be empty")
-var ErrBodyTooLarge = errors.New("request body too large")
-var ErrUnknownField = errors.New("unknown field in request body")
-var ErrContentType = errors.New("content type must be application/json")
-
 func (app *application) errorResponse(w http.ResponseWriter, status int, message any) {
 	resp := envelope{"error": message}
 
@@ -58,17 +51,27 @@ func (app *application) invalidParameterResponse(w http.ResponseWriter, paramete
 	app.errorResponse(w, http.StatusBadRequest, message)
 }
 
+func (app *application) invalidCredentialsResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid authentication credentials"
+	app.errorResponse(w, http.StatusUnauthorized, message)
+}
+
+func (app *application) invalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid or missing authentication token"
+	app.errorResponse(w, http.StatusUnauthorized, message)
+}
+
 func (app *application) invalidJSONResponse(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, ErrEmptyBody):
+	case errors.Is(err, h.ErrEmptyBody):
 		app.badRequestResponse(w, "request body must not be empty")
-	case errors.Is(err, ErrBodyTooLarge):
+	case errors.Is(err, h.ErrBodyTooLarge):
 		app.errorResponse(w, http.StatusRequestEntityTooLarge, "request body too large")
-	case errors.Is(err, ErrUnknownField):
+	case errors.Is(err, h.ErrUnknownField):
 		app.badRequestResponse(w, err.Error()) // contains the field name
-	case errors.Is(err, ErrContentType):
+	case errors.Is(err, h.ErrContentType):
 		app.errorResponse(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
-	case errors.Is(err, ErrInvalidJSON):
+	case errors.Is(err, h.ErrInvalidJSON):
 		app.badRequestResponse(w, "invalid JSON")
 	default:
 		app.badRequestResponse(w, "invalid JSON")
