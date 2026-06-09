@@ -15,11 +15,13 @@ type UsersModel struct {
 	DB *sql.DB
 }
 
+var ErrDuplicateEmail = errors.New("duplicate email")
+
 type User struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
-	Password  password  `json:"password"`
+	Password  password  `json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 	Activated bool      `json:"activated"`
 }
@@ -89,4 +91,33 @@ func (u *UsersModel) InsertUser(user *User) error {
 	}
 
 	return nil
+}
+
+func (u *UsersModel) GetUserByEmail(email string) (*User, error) {
+	query := `SELECT id, name, email, Password, created_at, activated FROM users WHERE email = $1`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var user User
+
+	err := u.DB.QueryRowContext(ctx, query, email).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.Password.hash,
+		&user.CreatedAt,
+		&user.Activated,
+	)
+
+	if err != nil {
+		switch {
+		case (errors.Is(err, sql.ErrNoRows)):
+			return nil, helpers.ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }
