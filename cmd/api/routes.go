@@ -15,7 +15,7 @@ func (app *application) routes() http.Handler {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(app.requireAuthenticatedUser)
+		r.Use(app.requireAuth)
 
 		r.Route("/api/v1/todos", func(r chi.Router) {
 			r.Get("/", app.listTodosHandler)
@@ -30,11 +30,11 @@ func (app *application) routes() http.Handler {
 
 		})
 
-		r.Route("/api/v1/projects", func(r chi.Router) {
-			r.Use(app.requireAuthenticatedUser)
-			r.Get("/profile", app.getProfileHandler)
-			r.Put("/profile", app.updateProfileHandler)
-		})
+		// r.Route("/api/v1/projects", func(r chi.Router) {
+		// 	r.Use(app.requireAuth)
+		// 	r.Get("/profile", app.getProfileHandler)
+		// 	r.Put("/profile", app.updateProfileHandler)
+		// })
 	})
 
 	return r
