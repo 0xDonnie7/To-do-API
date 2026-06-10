@@ -9,6 +9,10 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
+type contextKey string
+
+const userIDKey contextKey = "user_id"
+
 func (app *application) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -31,8 +35,19 @@ func (app *application) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-		r = r.WithContext(context.WithValue(r.Context(), "user_id", claims["user_id"]))
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+
+		userID, ok := claims["user_id"].(string)
+		if !ok || userID == "" {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
+
+		r = r.WithContext(context.WithValue(r.Context(), userIDKey, userID))
 
 		next.ServeHTTP(w, r)
 	})
