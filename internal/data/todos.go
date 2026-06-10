@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+	"todoListAPI/internal/helpers"
 
 	"github.com/google/uuid"
 )
@@ -15,18 +16,21 @@ type TodosModel struct {
 
 type Todo struct {
 	ID          uuid.UUID `json:"id"`
+	UserID      uuid.UUID `json:"user_id"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Completed   bool      `json:"completed"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (t *TodosModel) InsertTodo(todo Todo) error {
 	query := `
-	INSERT INTO todos (id, title, description, completed)
-	VALUES ($1, $2, $3, $4)
+	INSERT INTO todos (id,  user_id, title, description, completed, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
-	args := []any{todo.ID, todo.Title, todo.Description, todo.Completed}
+	args := []any{todo.ID, todo.UserID, todo.Title, todo.Description, todo.Completed, todo.CreatedAt, todo.UpdatedAt}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -39,15 +43,18 @@ func (t *TodosModel) InsertTodo(todo Todo) error {
 	return nil
 }
 
-func (t *TodosModel) GetAllTodos() ([]*Todo, error) {
+func (t *TodosModel) GetAllTodosForUser(userID uuid.UUID) ([]*Todo, error) {
 	query := `
-		SELECT id, title, description, completed FROM todos
+		SELECT id, user_id, title, description, completed, created_at, updated_at
+		FROM todos
+		WHERE user_id = $1
+		ORDER BY created_at DESC
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := t.DB.QueryContext(ctx, query)
+	rows, err := t.DB.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +66,7 @@ func (t *TodosModel) GetAllTodos() ([]*Todo, error) {
 
 	for rows.Next() {
 		var todo Todo
-		err := rows.Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed)
+		err := rows.Scan(&todo.ID, &todo.UserID, &todo.Title, &todo.Description, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -73,22 +80,22 @@ func (t *TodosModel) GetAllTodos() ([]*Todo, error) {
 	return todos, nil
 }
 
-func (t *TodosModel) GetTodo(id uuid.UUID) (*Todo, error) {
+func (t *TodosModel) GetTodo(id uuid.UUID, userID uuid.UUID) (*Todo, error) {
 	query := `
-		SELECT id, title, description, completed 
+		SELECT id, user_id, title, description, completed, created_at, updated_at
 		FROM todos 
-		WHERE id = $1
+		WHERE id = $1 AND user_id = $2
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	var todo Todo
-	err := t.DB.QueryRowContext(ctx, query, id).Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed)
+	err := t.DB.QueryRowContext(ctx, query, id, userID).Scan(&todo.ID, &todo.UserID, &todo.Title, &todo.Description, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, errors.New("todo record not found")
+			return nil, helpers.ErrRecordNotFound
 		default:
 			return nil, err
 		}
@@ -101,11 +108,11 @@ func (t *TodosModel) GetTodo(id uuid.UUID) (*Todo, error) {
 func (t *TodosModel) UpdateTodo(todo *Todo) error {
 	query := `
 		UPDATE todos 
-		SET title = $1, description = $2, completed = $3
-		WHERE id = $4
+		SET title = $1, description = $2, completed = $3, updated_at = $4
+		WHERE id = $5 AND user_id = $6
 	`
 
-	args := []any{todo.Title, todo.Description, todo.Completed, todo.ID}
+	args := []any{todo.Title, todo.Description, todo.Completed, todo.UpdatedAt, todo.ID, todo.UserID}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -122,23 +129,23 @@ func (t *TodosModel) UpdateTodo(todo *Todo) error {
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("record not found")
+		return helpers.ErrRecordNotFound
 	}
 
 	return nil
 
 }
 
-func (t *TodosModel) DeleteTodo(id uuid.UUID) error {
+func (t *TodosModel) DeleteTodo(id uuid.UUID, userID uuid.UUID) error {
 	query := `
 		DELETE FROM todos 
-		WHERE id = $1 
+		WHERE id = $1 AND user_id = $2
 	`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	result, err := t.DB.ExecContext(ctx, query, id)
+	result, err := t.DB.ExecContext(ctx, query, id, userID)
 
 	if err != nil {
 		return err
@@ -150,21 +157,21 @@ func (t *TodosModel) DeleteTodo(id uuid.UUID) error {
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("record not found")
+		return helpers.ErrRecordNotFound
 	}
 
 	return nil
 
 }
 
-func (t *TodosModel) MarkTodoComplete(id uuid.UUID) error {
+func (t *TodosModel) MarkTodoComplete(id uuid.UUID, userID uuid.UUID) error {
 	query := `
 		UPDATE todos
-		SET completed = true
-		WHERE id = $1
+		SET completed = true, updated_at = $3
+		WHERE id = $1 AND user_id = $2
 	`
 
-	args := []any{id}
+	args := []any{id, userID, time.Now()}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -180,7 +187,7 @@ func (t *TodosModel) MarkTodoComplete(id uuid.UUID) error {
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("record not found")
+		return helpers.ErrRecordNotFound
 	}
 
 	return nil
