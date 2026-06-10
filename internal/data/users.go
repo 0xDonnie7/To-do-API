@@ -94,7 +94,7 @@ func (u *UsersModel) InsertUser(user *User) error {
 }
 
 func (u *UsersModel) GetUserByEmail(email string) (*User, error) {
-	query := `SELECT id, name, email, Password, created_at, activated FROM users WHERE email = $1`
+	query := `SELECT id, name, email, password_hash, created_at, activated FROM users WHERE email = $1`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
