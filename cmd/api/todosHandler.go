@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -21,6 +22,20 @@ type UpdateTodoInput struct {
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
 	Completed   *bool   `json:"completed"`
+}
+
+func authenticatedUserID(r *http.Request) (uuid.UUID, bool) {
+	userIDString, ok := r.Context().Value(userIDKey).(string)
+	if !ok || userIDString == "" {
+		return uuid.Nil, false
+	}
+
+	userID, err := uuid.Parse(userIDString)
+	if err != nil {
+		return uuid.Nil, false
+	}
+
+	return userID, true
 }
 
 func (app *application) createTodoHandler(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +59,17 @@ func (app *application) createTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	userID, ok := authenticatedUserID(r)
+	if !ok {
+		app.invalidAuthenticationTokenResponse(w, r)
+		return
+	}
+
 	todo.ID = uuid.New()
+	todo.UserID = userID
 	todo.Completed = false
+	todo.CreatedAt = time.Now()
+	todo.UpdatedAt = todo.CreatedAt
 
 	err = app.models.Todos.InsertTodo(todo)
 	if err != nil {
@@ -56,9 +80,16 @@ func (app *application) createTodoHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) listTodosHandler(w http.ResponseWriter, r *http.Request) {
-	AllTodos, err := app.models.Todos.GetAllTodos()
+	userID, ok := authenticatedUserID(r)
+	if !ok {
+		app.invalidAuthenticationTokenResponse(w, r)
+		return
+	}
+
+	AllTodos, err := app.models.Todos.GetAllTodosForUser(userID)
 	if err != nil {
 		app.logger.Error("failed to return all Todos", "err", err)
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 
@@ -76,7 +107,13 @@ func (app *application) getTodoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	todo, err := app.models.Todos.GetTodo(id)
+	userID, ok := authenticatedUserID(r)
+	if !ok {
+		app.invalidAuthenticationTokenResponse(w, r)
+		return
+	}
+
+	todo, err := app.models.Todos.GetTodo(id, userID)
 	if err != nil {
 		switch {
 		case errors.Is(err, h.ErrRecordNotFound):
@@ -103,7 +140,13 @@ func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	existingTodo, err := app.models.Todos.GetTodo(id)
+	userID, ok := authenticatedUserID(r)
+	if !ok {
+		app.invalidAuthenticationTokenResponse(w, r)
+		return
+	}
+
+	existingTodo, err := app.models.Todos.GetTodo(id, userID)
 	if err != nil {
 		switch {
 		case errors.Is(err, h.ErrRecordNotFound):
@@ -134,6 +177,8 @@ func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request
 		existingTodo.Completed = *input.Completed
 	}
 
+	existingTodo.UpdatedAt = time.Now()
+
 	err = app.models.Todos.UpdateTodo(existingTodo)
 	if err != nil {
 		app.logger.Error("failed to update todo", "err", err)
@@ -150,7 +195,13 @@ func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.models.Todos.DeleteTodo(id)
+	userID, ok := authenticatedUserID(r)
+	if !ok {
+		app.invalidAuthenticationTokenResponse(w, r)
+		return
+	}
+
+	err = app.models.Todos.DeleteTodo(id, userID)
 	if err != nil {
 		switch {
 		case errors.Is(err, h.ErrRecordNotFound):
@@ -171,7 +222,13 @@ func (app *application) completeTodoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = app.models.Todos.MarkTodoComplete(id)
+	userID, ok := authenticatedUserID(r)
+	if !ok {
+		app.invalidAuthenticationTokenResponse(w, r)
+		return
+	}
+
+	err = app.models.Todos.MarkTodoComplete(id, userID)
 	if err != nil {
 		switch {
 		case errors.Is(err, h.ErrRecordNotFound):
