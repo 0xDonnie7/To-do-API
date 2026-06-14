@@ -49,11 +49,16 @@ func main() {
 	flag.IntVar(&cfg.db.MaxOpenConns, "db-max-open-conns", 50, "Postgres max open connections")
 	flag.StringVar(&cfg.db.MaxIdleTime, "db-max-idle-time", "15m", "Postgres max idle time")
 	flag.IntVar(&cfg.db.MaxIdleConns, "db-max-idle-conns", 25, "Postgres max idle connnections")
-	flag.StringVar(&cfg.jwt.secret, "jwt-secret", os.Getenv("JWT-SECRET"), "JWT signing secret")
+	flag.StringVar(&cfg.jwt.secret, "jwt-secret", getJWTSecret(), "JWT signing secret")
 
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	if cfg.jwt.secret == "" {
+		logger.Error("JWT secret must be set with JWT_SECRET or the -jwt-secret flag")
+		os.Exit(1)
+	}
 
 	db, err := openDB(cfg)
 	if err != nil {
@@ -75,12 +80,22 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 	}
 
+	app.logger.Info("starting server on port", "port", cfg.port)
+
 	err = srv.ListenAndServe()
 	if err != nil {
 		app.logger.Error("failed to start server", "error", err)
 		os.Exit(1)
 	}
 
+}
+
+func getJWTSecret() string {
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		return secret
+	}
+
+	return os.Getenv("JWT-SECRET")
 }
 
 func openDB(cfg config) (*sql.DB, error) {
