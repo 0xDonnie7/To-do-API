@@ -8,6 +8,7 @@ import (
 	"todoListAPI/internal/helpers"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -87,6 +88,11 @@ func (u *UsersModel) InsertUser(user *User) error {
 
 	_, err := u.DB.ExecContext(ctx, query, args...)
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return ErrDuplicateEmail
+		}
+
 		return err
 	}
 
