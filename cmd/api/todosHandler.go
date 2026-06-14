@@ -69,11 +69,17 @@ func (app *application) createTodoHandler(w http.ResponseWriter, r *http.Request
 	todo.UserID = userID
 	todo.Completed = false
 	todo.CreatedAt = time.Now()
-	todo.UpdatedAt = todo.CreatedAt
 
 	err = app.models.Todos.InsertTodo(todo)
 	if err != nil {
 		app.logger.Error("failed to insert todo", "err", err)
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = h.WriteJSON(w, http.StatusCreated, envelope{"todo": todo})
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 
@@ -186,6 +192,12 @@ func (app *application) updateTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	err = h.WriteJSON(w, http.StatusOK, envelope{"todo": existingTodo})
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
 }
 
 func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request) {
@@ -213,6 +225,8 @@ func (app *application) deleteTodoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	w.WriteHeader(http.StatusNoContent)
+
 }
 
 func (app *application) completeTodoHandler(w http.ResponseWriter, r *http.Request) {
@@ -239,4 +253,6 @@ func (app *application) completeTodoHandler(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
